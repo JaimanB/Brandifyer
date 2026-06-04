@@ -311,12 +311,23 @@ def _run_color_luma(rpr, a):
     return ('other', None)
 
 
-def _set_run_color(rpr, a, hexval):
+def _set_run_color(rpr, a, hexval=None, gradient=False):
     for sf in rpr.findall(a + 'solidFill'):
         rpr.remove(sf)
-    fill = etree.Element(a + 'solidFill')
-    etree.SubElement(fill, a + 'srgbClr').set('val', hexval)
-    # solidFill must sit after <a:ln> if present, else can go first
+    for gf in rpr.findall(a + 'gradFill'):
+        rpr.remove(gf)
+    if gradient:
+        fill = etree.Element(a + 'gradFill')
+        gsLst = etree.SubElement(fill, a + 'gsLst')
+        gs0 = etree.SubElement(gsLst, a + 'gs'); gs0.set('pos', '0')
+        etree.SubElement(gs0, a + 'srgbClr').set('val', 'D92398')
+        gs1 = etree.SubElement(gsLst, a + 'gs'); gs1.set('pos', '100000')
+        etree.SubElement(gs1, a + 'srgbClr').set('val', 'EB3FC7')
+        lin = etree.SubElement(fill, a + 'lin')
+        lin.set('ang', '5400000'); lin.set('scaled', '1')
+    else:
+        fill = etree.Element(a + 'solidFill')
+        etree.SubElement(fill, a + 'srgbClr').set('val', hexval)
     ln = rpr.find(a + 'ln')
     if ln is not None:
         ln.addnext(fill)
@@ -324,8 +335,23 @@ def _set_run_color(rpr, a, hexval):
         rpr.insert(0, fill)
 
 
+def _is_stat_run(r, a):
+    """True if this run is a hero stat number: large-ish, short, has digits."""
+    t = r.find(a + 't')
+    txt = (t.text or '').strip() if t is not None else ''
+    if not txt or len(txt) > 15:
+        return False
+    rpr = r.find(a + 'rPr')
+    sz = int(rpr.get('sz', '0')) if rpr is not None else 0
+    if sz < 1800:
+        return False
+    return any(c.isdigit() for c in txt)
+
+
 def _fix_para_runs(para, a, dark):
-    """Recolour runs in a paragraph for a dark/light local background."""
+    """Recolour runs in a paragraph for a dark/light local background.
+    On dark backgrounds, hero stat numbers get the brand pink gradient instead
+    of plain white."""
     target = NEAR_WHITE if dark else PRIMARY_BLUE
     changed = False
     runs = para.findall(a + 'r')
@@ -348,7 +374,10 @@ def _fix_para_runs(para, a, dark):
             if rpr is None:
                 rpr = etree.Element(a + 'rPr')
                 r.insert(0, rpr)
-            _set_run_color(rpr, a, target)
+            if dark and _is_stat_run(r, a):
+                _set_run_color(rpr, a, gradient=True)
+            else:
+                _set_run_color(rpr, a, hexval=target)
             changed = True
     return changed
 
@@ -401,16 +430,24 @@ def _fix_contrast_local(slide_xml, zin, slide_name, w, h):
         if not any((t.text or '').strip() for t in sp.iter(a + 't')):
             continue
         bbox = _shape_bbox(sp)
+        # for shapes inside groups, use the group's absolute bbox for panel
+        # detection (the shape's own bbox is in group-local coordinates)
+        detect_bbox = bbox
+        parent = sp.getparent()
+        if parent is not None and etree.QName(parent).localname == 'grpSp':
+            grp_bbox = _shape_bbox(parent)
+            if grp_bbox is not None:
+                detect_bbox = grp_bbox
         own = _fill_luma(sp)
         # local bg luminance behind this text shape
         if own is not None:
             lum = own
         else:
             lum = slide_lum
-            if bbox is not None:
-                cx, cy = bbox[0] + bbox[2] / 2, bbox[1] + bbox[3] / 2
+            if detect_bbox is not None:
+                cx, cy = detect_bbox[0] + detect_bbox[2] / 2, detect_bbox[1] + detect_bbox[3] / 2
                 for pb, pl in reversed(panels):
-                    if pb == bbox:
+                    if pb == detect_bbox:
                         continue
                     # require centre to be well inside the panel (10% inset),
                     # not just touching the edge
@@ -627,7 +664,7 @@ def _embed_fonts(merged, names):
 
 # ── orchestrator ────────────────────────────────────────────────────────────────
 def normalize_deck(in_path, out_path, *, logo_blue, logo_white,
-                   swap_fonts=True, embed_fonts=True, add_logo=True,
+                   swap_fonts=True, embed_fonts=True, add_logo=False,
                    fix_contrast=True, force_169=True, **_ignored):
     report = {'slides': [], 'warnings': [], 'size': None, 'logos_added': 0,
               'logos_kept': 0}
