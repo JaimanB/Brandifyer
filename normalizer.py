@@ -394,7 +394,7 @@ def _fix_contrast_local(slide_xml, zin, slide_name, w, h):
 
     slide_regime, _, slide_lum = _effective_bg(zin, slide_name, slide_xml, w, h)
 
-    # Collect top-level filled panels (bbox + luma), in z-order.
+    # Collect top-level filled panels (bbox + luma + element ref), in z-order.
     panels = []
     for el in list(spTree):
         tag = etree.QName(el).localname
@@ -403,23 +403,8 @@ def _fix_contrast_local(slide_xml, zin, slide_name, w, h):
         bbox = _shape_bbox(el)
         lum = _fill_luma(el, zin, slide_name)
         if bbox and lum is not None:
-            panels.append((bbox, lum))
+            panels.append((bbox, lum, el))
 
-    def local_luma_for(bbox, own_lum):
-        if own_lum is not None:
-            return own_lum
-        if bbox is not None:
-            cx, cy = bbox[0] + bbox[2] / 2, bbox[1] + bbox[3] / 2
-            # topmost panel (later in z-order) whose box contains this centre
-            for pb, pl in reversed(panels):
-                if pb is bbox_self_marker:
-                    continue
-                if pb[0] <= cx <= pb[0] + pb[2] and pb[1] <= cy <= pb[1] + pb[3] \
-                        and not (pb == bbox):
-                    return pl
-        return slide_lum
-
-    bbox_self_marker = object()
     changed = False
 
     # text shapes (including inside groups — root.iter catches nested sp)
@@ -446,9 +431,10 @@ def _fix_contrast_local(slide_xml, zin, slide_name, w, h):
             lum = slide_lum
             if detect_bbox is not None:
                 cx, cy = detect_bbox[0] + detect_bbox[2] / 2, detect_bbox[1] + detect_bbox[3] / 2
-                for pb, pl in reversed(panels):
-                    if pb == detect_bbox:
-                        continue
+                for pb, pl, pel in reversed(panels):
+                    if pel is sp:    # identity check — different shapes with the
+                        continue    # same bbox (e.g. text stacked on a coloured
+                                    # tile) must still see each other
                     # require centre to be inside the panel with a margin,
                     # but cap the margin for large panels (a full-height panel's
                     # 10% margin would exclude stat numbers near the top)
@@ -642,6 +628,23 @@ def _round_corners(sp, a, val):
     return True
 
 
+def _set_shape_fill_solid(sp, a, hexval):
+    """Replace a shape's fill with a solid colour."""
+    spPr = sp.find('{%s}spPr' % NS_P)
+    if spPr is None:
+        return
+    for tag in ('solidFill', 'gradFill', 'noFill', 'blipFill', 'pattFill'):
+        for el in spPr.findall(a + tag):
+            spPr.remove(el)
+    sf = etree.Element(a + 'solidFill')
+    etree.SubElement(sf, a + 'srgbClr').set('val', hexval)
+    geom = spPr.find(a + 'prstGeom')
+    if geom is not None:
+        geom.addnext(sf)
+    else:
+        spPr.insert(0, sf)
+
+
 def _apply_structural_fixes(slide_xml, w, h):
     """Run the deck-cleanup pass: remove off-brand decorations, replace navy
     panels with the hero gradient, round harsh-edged cards and eyebrows.
@@ -650,7 +653,8 @@ def _apply_structural_fixes(slide_xml, w, h):
     a = '{%s}' % NS_A; p = '{%s}' % NS_P
     info = {'footer_removed': False, 'pink_bar_removed': False,
             'eyebrows_rounded': 0, 'cards_rounded': 0,
-            'navy_panels_replaced': 0, 'corner_decorations_removed': 0}
+            'navy_panels_replaced': 0, 'corner_decorations_removed': 0,
+            'card_strips_removed': 0, 'navy_blocks_recoloured': 0}
     try:
         root = etree.fromstring(slide_xml.encode('utf-8'))
     except Exception:
@@ -697,6 +701,11 @@ def _apply_structural_fixes(slide_xml, w, h):
         if xr < 0.05 and wr < 0.06 and hr > 0.40 and _is_pink(fill_hex):
             spTree.remove(sp); info['pink_bar_removed'] = True; continue
 
+        # 2b) thin pink horizontal strip on a card (above/below a card body) —
+        #     very wide vs tall, height tiny — pure decoration to remove
+        if _is_pink(fill_hex) and hr < 0.02 and 0.08 < wr < 0.35 and yr > 0.10:
+            spTree.remove(sp); info['card_strips_removed'] += 1; continue
+
         # 3) decorative corner squares (off-brand): small solid rect in a corner
         #    with no text content (purely visual blocks)
         in_top_right = cxr > 0.80 and cyr < 0.25
@@ -706,12 +715,32 @@ def _apply_structural_fixes(slide_xml, w, h):
                 and wr < 0.20 and hr < 0.30:
             spTree.remove(sp); info['corner_decorations_removed'] += 1; continue
 
-        # 4) large dark navy panel on left → hero gradient
+        # 4a) large dark navy panel on left → hero gradient
         if xr < 0.05 and wr > 0.20 and hr > 0.50 and fill_hex \
                 and _luminance(fill_hex) < 60:
             _set_shape_hero_gradient(sp, a)
             info['navy_panels_replaced'] += 1
             continue
+
+        # 4b) prominent solid-navy blocks (panels, headers, callout cards) → brand
+        #     purple. The master deck uses navy mostly inside tables (graphicFrame),
+        #     so standalone navy <p:sp> rectangles tend to be the heavy off-brand
+        #     blocks. Skip tiny accent dots and full-slide backgrounds.
+        if fill_hex and _luminance(fill_hex) < 50 and prst_kind in ('rect', 'roundRect') \
+                and wr >= 0.04 and hr >= 0.03 \
+                and not (wr > 0.95 and hr > 0.95):
+            try:
+                r, g, b = (int(fill_hex[0:2], 16), int(fill_hex[2:4], 16),
+                           int(fill_hex[4:6], 16))
+                # blue-leaning (not pure black, not red-leaning)
+                is_navy = b > r and b > g and b > 30
+            except Exception:
+                is_navy = False
+            if is_navy:
+                _set_shape_fill_solid(sp, a, '6115A6')
+                info['navy_blocks_recoloured'] += 1
+                # fall through to corner-rounding so the new purple block also
+                # gets rounded for consistency
 
         # 5) pink eyebrow banner near top → fully rounded pill (matches the
         #    master deck's button style for product labels)
