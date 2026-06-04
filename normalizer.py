@@ -569,6 +569,174 @@ def _slide_rels_with_logo(rels_bytes, media_target):
     return etree.tostring(root, xml_declaration=True, encoding='UTF-8', standalone=True)
 
 
+# ── structural deck fixes ──────────────────────────────────────────────────────
+def _solid_fill_hex(sp, a):
+    spPr = sp.find('{%s}spPr' % NS_P)
+    if spPr is None:
+        return None
+    sf = spPr.find(a + 'solidFill')
+    if sf is None:
+        return None
+    c = sf.find(a + 'srgbClr')
+    return c.get('val').upper() if c is not None else None
+
+
+def _has_visible_fill(sp, a):
+    spPr = sp.find('{%s}spPr' % NS_P)
+    if spPr is None:
+        return False
+    if spPr.find(a + 'noFill') is not None:
+        return False
+    return (spPr.find(a + 'solidFill') is not None or
+            spPr.find(a + 'gradFill') is not None or
+            spPr.find(a + 'blipFill') is not None)
+
+
+def _is_pink(hexval):
+    if not hexval or len(hexval) != 6:
+        return False
+    try:
+        r, g, b = int(hexval[0:2], 16), int(hexval[2:4], 16), int(hexval[4:6], 16)
+    except Exception:
+        return False
+    return r > 180 and g < 100 and b > 80 and r > g + 80
+
+
+def _set_shape_hero_gradient(sp, a):
+    """Replace a shape's fill with the Xelix hero gradient (6115A6 → 030312)."""
+    spPr = sp.find('{%s}spPr' % NS_P)
+    if spPr is None:
+        return
+    for tag in ('solidFill', 'gradFill', 'noFill', 'blipFill', 'pattFill'):
+        for el in spPr.findall(a + tag):
+            spPr.remove(el)
+    gf = etree.Element(a + 'gradFill')
+    gf.set('flip', 'none'); gf.set('rotWithShape', '1')
+    gsLst = etree.SubElement(gf, a + 'gsLst')
+    gs0 = etree.SubElement(gsLst, a + 'gs'); gs0.set('pos', '0')
+    etree.SubElement(gs0, a + 'srgbClr').set('val', '6115A6')
+    gs1 = etree.SubElement(gsLst, a + 'gs'); gs1.set('pos', '100000')
+    etree.SubElement(gs1, a + 'srgbClr').set('val', '030312')
+    lin = etree.SubElement(gf, a + 'lin')
+    lin.set('ang', '13500000')   # -45° (135° clockwise)
+    lin.set('scaled', '0')
+    # spPr child order: xfrm, prstGeom/custGeom, fill, ... — insert after geom
+    geom = spPr.find(a + 'prstGeom')
+    if geom is not None:
+        geom.addnext(gf)
+    else:
+        spPr.insert(0, gf)
+
+
+def _round_corners(sp, a, val):
+    """Change prstGeom rect → roundRect with avLst adj=val."""
+    prst = sp.find('.//' + a + 'prstGeom')
+    if prst is None or prst.get('prst') != 'rect':
+        return False
+    prst.set('prst', 'roundRect')
+    for av in prst.findall(a + 'avLst'):
+        prst.remove(av)
+    av = etree.SubElement(prst, a + 'avLst')
+    gd = etree.SubElement(av, a + 'gd')
+    gd.set('name', 'adj'); gd.set('fmla', 'val %d' % val)
+    return True
+
+
+def _apply_structural_fixes(slide_xml, w, h):
+    """Run the deck-cleanup pass: remove off-brand decorations, replace navy
+    panels with the hero gradient, round harsh-edged cards and eyebrows.
+    Returns (new_xml, info) where info['footer_removed'] indicates if a footer
+    was stripped (so caller can add a wordmark in its place)."""
+    a = '{%s}' % NS_A; p = '{%s}' % NS_P
+    info = {'footer_removed': False, 'pink_bar_removed': False,
+            'eyebrows_rounded': 0, 'cards_rounded': 0,
+            'navy_panels_replaced': 0, 'corner_decorations_removed': 0}
+    try:
+        root = etree.fromstring(slide_xml.encode('utf-8'))
+    except Exception:
+        return slide_xml, info
+    spTree = root.find('.//' + p + 'spTree')
+    if spTree is None:
+        return slide_xml, info
+
+    # Pre-scan: does this slide have a navy footer bar? If so we'll sweep
+    # the whole bottom band (footer text, redundant wordmark text) when
+    # we remove the bar.
+    has_footer = False
+    for sp in spTree.findall(p + 'sp'):
+        bbox = _shape_bbox(sp)
+        if bbox is None:
+            continue
+        x, y, cx, cy = bbox
+        if y / h > 0.92 and cx / w > 0.85 and cy / h < 0.10:
+            fill = _solid_fill_hex(sp, a)
+            if fill and _luminance(fill) < 50:
+                has_footer = True
+                break
+
+    for sp in list(spTree.findall(p + 'sp')):
+        bbox = _shape_bbox(sp)
+        if bbox is None:
+            continue
+        x, y, cx, cy = bbox
+        xr, yr, wr, hr = x / w, y / h, cx / w, cy / h
+        cxr, cyr = xr + wr / 2, yr + hr / 2
+        fill_hex = _solid_fill_hex(sp, a)
+        prst = sp.find('.//' + a + 'prstGeom')
+        prst_kind = prst.get('prst') if prst is not None else None
+        has_text = any((t.text or '').strip() for t in sp.iter(a + 't'))
+
+        # 1) sweep bottom band when footer is present — bar + footer text +
+        #    redundant text-logo are all replaced by a proper wordmark
+        if has_footer and cyr > 0.93:
+            spTree.remove(sp)
+            info['footer_removed'] = True
+            continue
+
+        # 2) thin pink vertical bar on left edge
+        if xr < 0.05 and wr < 0.06 and hr > 0.40 and _is_pink(fill_hex):
+            spTree.remove(sp); info['pink_bar_removed'] = True; continue
+
+        # 3) decorative corner squares (off-brand): small solid rect in a corner
+        #    with no text content (purely visual blocks)
+        in_top_right = cxr > 0.80 and cyr < 0.25
+        in_top_left  = cxr < 0.20 and cyr < 0.10 and yr < 0.03
+        if (in_top_right or in_top_left) and prst_kind == 'rect' \
+                and fill_hex and not has_text \
+                and wr < 0.20 and hr < 0.30:
+            spTree.remove(sp); info['corner_decorations_removed'] += 1; continue
+
+        # 4) large dark navy panel on left → hero gradient
+        if xr < 0.05 and wr > 0.20 and hr > 0.50 and fill_hex \
+                and _luminance(fill_hex) < 60:
+            _set_shape_hero_gradient(sp, a)
+            info['navy_panels_replaced'] += 1
+            continue
+
+        # 5) pink eyebrow banner near top → fully rounded pill (matches the
+        #    master deck's button style for product labels)
+        is_eyebrow = (yr < 0.10 and 0.05 < wr < 0.30 and hr < 0.06
+                      and _is_pink(fill_hex))
+        if is_eyebrow and prst is not None and prst_kind in ('rect', 'roundRect'):
+            prst.set('prst', 'roundRect')
+            for av in prst.findall(a + 'avLst'):
+                prst.remove(av)
+            av = etree.SubElement(prst, a + 'avLst')
+            gd = etree.SubElement(av, a + 'gd')
+            gd.set('name', 'adj'); gd.set('fmla', 'val 50000')
+            info['eyebrows_rounded'] += 1
+            continue
+
+        # 6) other visible filled rectangles → subtle rounding (cards/panels)
+        if prst_kind == 'rect' and _has_visible_fill(sp, a) \
+                and wr > 0.05 and hr > 0.03 and not (wr > 0.95 and hr > 0.95):
+            if _round_corners(sp, a, 10000):
+                info['cards_rounded'] += 1
+
+    return (etree.tostring(root, xml_declaration=True, encoding='UTF-8',
+                           standalone=True).decode('utf-8'), info)
+
+
 # ── presentation size / content-types ──────────────────────────────────────────
 def _normalize_size(prs_xml):
     s = prs_xml.decode('utf-8', 'ignore')
@@ -682,33 +850,42 @@ def normalize_deck(in_path, out_path, *, logo_blue, logo_white,
     for sn in slide_names:
         sxml = merged[sn].decode('utf-8', 'ignore')
 
+        # structural deck fixes (remove off-brand decorations, replace navy
+        # panels with hero gradient, round harsh-edged shapes)
+        sxml, struct_info = _apply_structural_fixes(sxml, SLIDE_W_169, SLIDE_H_169)
+        for k, v in struct_info.items():
+            if isinstance(v, bool) and v:
+                report.setdefault(k + '_count', 0)
+                report[k + '_count'] += 1
+            elif isinstance(v, int) and v:
+                report.setdefault(k, 0)
+                report[k] += v
+
         if swap_fonts:
             sxml = _swap_fonts_in_runs(sxml)
         if fix_contrast:
             sxml = _fix_contrast_local(sxml, zin, sn, SLIDE_W_169, SLIDE_H_169)
 
         logo_choice = None
-        if add_logo:
-            if _has_corner_logo(zin, sn, merged[sn].decode('utf-8', 'ignore'),
-                                SLIDE_W_169, SLIDE_H_169):
-                report['logos_kept'] += 1
-            else:
-                # colour by the background behind the bottom-right corner
-                region = (0.74, 0.80, 1.0, 1.0)
-                regime, _, _ = _effective_bg(zin, sn,
-                                             merged[sn].decode('utf-8', 'ignore'),
-                                             SLIDE_W_169, SLIDE_H_169, region)
-                dark = (regime == 'dark')
-                logo_choice = 'white' if dark else 'blue'
-                sxml = _add_logo(sxml, SLIDE_W_169, SLIDE_H_169)
-                tgt = ('../media/xelix_logo_white.png' if dark
-                       else '../media/xelix_logo_blue.png')
-                rp = 'ppt/slides/_rels/%s.rels' % posixpath.basename(sn)
-                merged[rp] = _slide_rels_with_logo(
-                    merged.get(rp), tgt)
-                used_white = used_white or dark
-                used_blue = used_blue or (not dark)
-                report['logos_added'] += 1
+        # add a wordmark bottom-right on slides where the footer was removed
+        # (the footer was acting as a presence marker — replace with the logo)
+        if struct_info['footer_removed'] and not _has_corner_logo(
+                zin, sn, merged[sn].decode('utf-8', 'ignore'),
+                SLIDE_W_169, SLIDE_H_169):
+            region = (0.74, 0.80, 1.0, 1.0)
+            regime, _, _ = _effective_bg(zin, sn,
+                                         merged[sn].decode('utf-8', 'ignore'),
+                                         SLIDE_W_169, SLIDE_H_169, region)
+            dark = (regime == 'dark')
+            logo_choice = 'white' if dark else 'blue'
+            sxml = _add_logo(sxml, SLIDE_W_169, SLIDE_H_169)
+            tgt = ('../media/xelix_logo_white.png' if dark
+                   else '../media/xelix_logo_blue.png')
+            rp = 'ppt/slides/_rels/%s.rels' % posixpath.basename(sn)
+            merged[rp] = _slide_rels_with_logo(merged.get(rp), tgt)
+            used_white = used_white or dark
+            used_blue = used_blue or (not dark)
+            report['logos_added'] += 1
 
         merged[sn] = sxml.encode('utf-8')
         report['slides'].append({'slide': posixpath.basename(sn),
@@ -730,7 +907,7 @@ def normalize_deck(in_path, out_path, *, logo_blue, logo_white,
                 'resized, shapes were not rescaled.' % (orig[0] / orig[1]))
 
     # logo media + content types
-    if add_logo and (used_blue or used_white):
+    if used_blue or used_white:
         if '[Content_Types].xml' in merged:
             merged['[Content_Types].xml'] = _ensure_ct_default(
                 merged['[Content_Types].xml'], 'png', 'image/png')
