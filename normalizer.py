@@ -320,9 +320,9 @@ def _set_run_color(rpr, a, hexval=None, gradient=False):
         fill = etree.Element(a + 'gradFill')
         gsLst = etree.SubElement(fill, a + 'gsLst')
         gs0 = etree.SubElement(gsLst, a + 'gs'); gs0.set('pos', '0')
-        etree.SubElement(gs0, a + 'srgbClr').set('val', 'D92398')
+        etree.SubElement(gs0, a + 'srgbClr').set('val', 'EB3FC7')
         gs1 = etree.SubElement(gsLst, a + 'gs'); gs1.set('pos', '100000')
-        etree.SubElement(gs1, a + 'srgbClr').set('val', 'EB3FC7')
+        etree.SubElement(gs1, a + 'srgbClr').set('val', 'E450FB')
         lin = etree.SubElement(fill, a + 'lin')
         lin.set('ang', '5400000'); lin.set('scaled', '1')
     else:
@@ -449,9 +449,11 @@ def _fix_contrast_local(slide_xml, zin, slide_name, w, h):
                 for pb, pl in reversed(panels):
                     if pb == detect_bbox:
                         continue
-                    # require centre to be well inside the panel (10% inset),
-                    # not just touching the edge
-                    mx, my = pb[2] * 0.10, pb[3] * 0.10
+                    # require centre to be inside the panel with a margin,
+                    # but cap the margin for large panels (a full-height panel's
+                    # 10% margin would exclude stat numbers near the top)
+                    mx = min(pb[2] * 0.10, w * 0.03)
+                    my = min(pb[3] * 0.10, h * 0.03)
                     if pb[0] + mx <= cx <= pb[0] + pb[2] - mx and \
                        pb[1] + my <= cy <= pb[1] + pb[3] - my:
                         lum = pl
