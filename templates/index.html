@@ -11,84 +11,54 @@
 *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
 :root{
   --purple:#6115A6; --dark:#030312; --navy:#002749; --pink:#D92398;
-  --lilac:#CCBAFF; --blue:#0098FF; --offwhite:#F8F7FF; --greyblue:#DEE0FF;
-  --subtext:#6B6B88; --border:#E2E0F0; --white:#fff;
+  --lilac:#CCBAFF; --blue:#0098FF; --offwhite:#F8F7FF;
+  --subtext:#6B6B88; --border:#E2E0F0;
   --hero:linear-gradient(135deg,#6115A6 0%,#030312 100%);
   --radius:14px;
 }
 body{font-family:'Barlow',system-ui,-apple-system,sans-serif;background:var(--offwhite);
   color:var(--navy);min-height:100vh;-webkit-font-smoothing:antialiased}
-
-/* header */
 .header{background:var(--dark);height:60px;display:flex;align-items:center;gap:14px;
   padding:0 28px;position:sticky;top:0;z-index:10}
 .logo{font-weight:900;font-size:23px;color:#fff;letter-spacing:-.5px;display:flex;align-items:baseline}
 .logo .dot{color:var(--pink)}
 .header .sep{width:1px;height:22px;background:rgba(255,255,255,.16)}
 .header .tag{font-size:13px;color:var(--lilac);font-weight:600}
-
-.wrap{max-width:680px;margin:0 auto;padding:48px 20px 80px}
+.wrap{max-width:660px;margin:0 auto;padding:48px 20px 80px}
 .hero-title{font-weight:900;font-size:34px;line-height:1.1;letter-spacing:-.5px}
 .hero-sub{margin-top:10px;font-size:16px;color:var(--subtext);font-weight:500;line-height:1.5}
-
-.card{background:#fff;border-radius:var(--radius);box-shadow:0 2px 20px rgba(97,21,166,.08);
-  padding:26px;margin-top:26px}
-
-/* dropzone */
-.drop{border:2px dashed var(--border);border-radius:var(--radius);padding:40px 24px;text-align:center;
+.card{background:#fff;border-radius:var(--radius);box-shadow:0 2px 20px rgba(97,21,166,.08);padding:26px;margin-top:26px}
+.drop{border:2px dashed var(--border);border-radius:var(--radius);padding:44px 24px;text-align:center;
   cursor:pointer;transition:.18s;background:var(--offwhite)}
 .drop:hover,.drop.over{border-color:var(--purple);background:#fbf8ff}
-.drop.has{border-style:solid;border-color:var(--purple);background:#fff;text-align:left;
-  display:flex;align-items:center;gap:14px}
+.drop.has{border-style:solid;border-color:var(--purple);background:#fff;text-align:left;display:flex;align-items:center;gap:14px}
 .drop .ic{font-size:30px}
 .drop .big{font-weight:700;font-size:16px}
 .drop .small{font-size:13px;color:var(--subtext);margin-top:3px}
-.filemeta{flex:1}
-.filemeta .fname{font-weight:700;font-size:15px;word-break:break-all}
+.filemeta{flex:1}.filemeta .fname{font-weight:700;font-size:15px;word-break:break-all}
 .filemeta .fsize{font-size:12.5px;color:var(--subtext)}
-.clearbtn{border:none;background:#f0eef8;color:var(--subtext);border-radius:8px;
-  padding:6px 10px;font-size:12px;font-weight:600;cursor:pointer}
-.clearbtn:hover{background:#e7e3f3}
-
-/* mode */
-.section-label{font-weight:700;font-size:13px;text-transform:uppercase;letter-spacing:.06em;
-  color:var(--subtext);margin:24px 0 10px}
-.modes{display:flex;flex-direction:column;gap:10px}
-.mode{display:flex;gap:13px;border:1.5px solid var(--border);border-radius:12px;padding:15px 16px;cursor:pointer;transition:.15s}
-.mode:hover{border-color:var(--lilac)}
-.mode.sel{border-color:var(--purple);background:#fbf8ff}
-.mode input{margin-top:3px;accent-color:var(--purple);width:17px;height:17px;flex:none}
-.mode .mt{font-weight:700;font-size:15px}
-.mode .md{font-size:13px;color:var(--subtext);margin-top:3px;line-height:1.45}
-
-/* button */
-.go{width:100%;margin-top:24px;border:none;border-radius:12px;padding:16px;font-family:inherit;
-  font-weight:700;font-size:16px;color:#fff;background:var(--hero);cursor:pointer;transition:.15s;
-  letter-spacing:.2px}
+.clearbtn{border:none;background:#f0eef8;color:var(--subtext);border-radius:8px;padding:6px 10px;font-size:12px;font-weight:600;cursor:pointer}
+.does{margin-top:18px;font-size:13.5px;color:var(--subtext);line-height:1.7}
+.does b{color:var(--navy);font-weight:700}
+.go{width:100%;margin-top:22px;border:none;border-radius:12px;padding:16px;font-family:inherit;
+  font-weight:700;font-size:16px;color:#fff;background:var(--hero);cursor:pointer;transition:.15s;letter-spacing:.2px}
 .go:hover:not(:disabled){filter:brightness(1.08)}
 .go:disabled{opacity:.45;cursor:not-allowed}
-
 .spin{display:inline-block;width:16px;height:16px;border:2.5px solid rgba(255,255,255,.4);
   border-top-color:#fff;border-radius:50%;animation:sp .7s linear infinite;vertical-align:-3px;margin-right:8px}
 @keyframes sp{to{transform:rotate(360deg)}}
-
-/* result */
-.result{display:none}
-.result.show{display:block}
+.result{display:none}.result.show{display:block}
 .rtitle{font-weight:900;font-size:20px;display:flex;align-items:center;gap:9px}
 .rtitle .tick{width:26px;height:26px;border-radius:50%;background:var(--pink);color:#fff;
   display:flex;align-items:center;justify-content:center;font-size:15px;flex:none}
 .stats{display:flex;gap:10px;margin:18px 0}
 .stat{flex:1;background:var(--offwhite);border-radius:11px;padding:14px;text-align:center}
-.stat .n{font-weight:900;font-size:26px;color:var(--purple)}
-.stat .l{font-size:12px;color:var(--subtext);font-weight:600;margin-top:2px}
-.note{font-size:13px;color:var(--subtext);background:#fff7e6;border:1px solid #ffe2a8;
-  border-radius:10px;padding:11px 13px;margin-bottom:14px;line-height:1.45}
-.dl{display:block;text-align:center;text-decoration:none;border-radius:12px;padding:15px;
-  font-weight:700;font-size:16px;color:#fff;background:var(--navy)}
+.stat .n{font-weight:900;font-size:24px;color:var(--purple)}
+.stat .l{font-size:11.5px;color:var(--subtext);font-weight:600;margin-top:2px}
+.note{font-size:13px;color:var(--subtext);background:#fff7e6;border:1px solid #ffe2a8;border-radius:10px;padding:11px 13px;margin-bottom:14px;line-height:1.45}
+.dl{display:block;text-align:center;text-decoration:none;border-radius:12px;padding:15px;font-weight:700;font-size:16px;color:#fff;background:var(--navy)}
 .dl:hover{filter:brightness(1.12)}
-.err{display:none;color:#b00050;background:#ffe9f4;border:1px solid #ffc4e2;border-radius:10px;
-  padding:12px 14px;margin-top:16px;font-size:14px;font-weight:600}
+.err{display:none;color:#b00050;background:#ffe9f4;border:1px solid #ffc4e2;border-radius:10px;padding:12px 14px;margin-top:16px;font-size:14px;font-weight:600}
 .err.show{display:block}
 .footnote{font-size:12.5px;color:var(--subtext);margin-top:22px;text-align:center;line-height:1.5}
 </style>
@@ -103,8 +73,7 @@ body{font-family:'Barlow',system-ui,-apple-system,sans-serif;background:var(--of
 <div class="wrap">
   <h1 class="hero-title">Make your deck on-brand</h1>
   <p class="hero-sub">Upload an assembled Xelix deck and it gets aligned to the brand
-    guidelines &mdash; Barlow typography and the wordmark on every slide, with an option to
-    standardise backgrounds and text colours too.</p>
+    guidelines &mdash; one click, no setup.</p>
 
   <div class="card">
     <input type="file" id="file" accept=".pptx" hidden>
@@ -112,29 +81,15 @@ body{font-family:'Barlow',system-ui,-apple-system,sans-serif;background:var(--of
       <div class="ic">&#128228;</div>
       <div>
         <div class="big">Drop your .pptx here, or click to browse</div>
-        <div class="small">One PowerPoint file &middot; up to 200&nbsp;MB</div>
+        <div class="small">One PowerPoint file &middot; up to 300&nbsp;MB</div>
       </div>
     </div>
 
-    <div class="section-label">Level of alignment</div>
-    <div class="modes">
-      <label class="mode sel" id="m-safe">
-        <input type="radio" name="mode" value="safe" checked>
-        <div>
-          <div class="mt">Logo &amp; fonts &nbsp;<span style="color:var(--purple)">&middot; recommended</span></div>
-          <div class="md">Sets every slide in Barlow and adds the wordmark bottom-right.
-            Non-destructive &mdash; existing backgrounds, colours and layouts are left exactly as they are.</div>
-        </div>
-      </label>
-      <label class="mode" id="m-full">
-        <input type="radio" name="mode" value="full">
-        <div>
-          <div class="mt">Full brand alignment</div>
-          <div class="md">Also imposes the canonical white / hero-gradient backgrounds and brand
-            text colours. Best for plain decks &mdash; it will replace backgrounds and recolour text,
-            so deliberately-designed slides can change.</div>
-        </div>
-      </label>
+    <div class="does">
+      Every slide gets: <b>Barlow embedded</b> in the file (so it looks right on any
+      machine), <b>Barlow typography</b>, one <b>wordmark</b> bottom-right in the
+      correct colour (existing logos are kept, not doubled), and <b>contrast-repaired
+      text</b> so nothing is dark-on-dark. Backgrounds and layouts are left untouched.
     </div>
 
     <button class="go" id="go" disabled>Align to brand</button>
@@ -144,37 +99,28 @@ body{font-family:'Barlow',system-ui,-apple-system,sans-serif;background:var(--of
   <div class="card result" id="result">
     <div class="rtitle"><span class="tick">&#10003;</span> Your deck is on-brand</div>
     <div class="stats">
-      <div class="stat"><div class="n" id="s-total">0</div><div class="l">slides</div></div>
-      <div class="stat"><div class="n" id="s-light">0</div><div class="l">light</div></div>
-      <div class="stat"><div class="n" id="s-dark">0</div><div class="l">dark</div></div>
+      <div class="stat"><div class="n" id="s-total">0</div><div class="l">slides aligned</div></div>
+      <div class="stat"><div class="n" id="s-added">0</div><div class="l">logos added</div></div>
+      <div class="stat"><div class="n" id="s-kept">0</div><div class="l">logos kept</div></div>
+      <div class="stat"><div class="n" id="s-fonts">&mdash;</div><div class="l">fonts embedded</div></div>
     </div>
     <div class="note" id="note" style="display:none"></div>
     <a class="dl" id="dl" href="#">Download on-brand deck</a>
   </div>
 
-  <div class="footnote">Files are processed on the server and not stored long-term.
-    Barlow is a free Google Font &mdash; install it so the deck renders correctly everywhere.</div>
+  <div class="footnote">Files are processed on the server and not stored long-term.</div>
 </div>
 
 <script>
 const $=s=>document.querySelector(s);
-const fileInput=$('#file'), drop=$('#drop'), go=$('#go'), err=$('#err'),
-      result=$('#result'), dl=$('#dl');
+const fileInput=$('#file'), drop=$('#drop'), go=$('#go'), err=$('#err'), result=$('#result'), dl=$('#dl');
 let chosen=null;
-
-// mode selection styling
-document.querySelectorAll('.mode').forEach(m=>{
-  m.addEventListener('click',()=>{
-    document.querySelectorAll('.mode').forEach(x=>x.classList.remove('sel'));
-    m.classList.add('sel'); m.querySelector('input').checked=true;
-  });
-});
 
 function setFile(f){
   chosen=f; err.classList.remove('show'); result.classList.remove('show');
   if(!f){ drop.className='drop'; drop.innerHTML=
     '<div class="ic">&#128228;</div><div><div class="big">Drop your .pptx here, or click to browse</div>'+
-    '<div class="small">One PowerPoint file &middot; up to 200&nbsp;MB</div></div>';
+    '<div class="small">One PowerPoint file &middot; up to 300&nbsp;MB</div></div>';
     go.disabled=true; return; }
   const kb=f.size/1024, sz=kb>1024?(kb/1024).toFixed(1)+' MB':Math.round(kb)+' KB';
   drop.className='drop has';
@@ -184,7 +130,6 @@ function setFile(f){
   $('#clr').addEventListener('click',e=>{e.stopPropagation();fileInput.value='';setFile(null);});
   go.disabled=false;
 }
-
 drop.addEventListener('click',()=>{ if(!chosen) fileInput.click(); });
 fileInput.addEventListener('change',e=>{ if(e.target.files[0]) setFile(e.target.files[0]); });
 ['dragenter','dragover'].forEach(ev=>drop.addEventListener(ev,e=>{e.preventDefault();drop.classList.add('over');}));
@@ -197,20 +142,16 @@ go.addEventListener('click',async()=>{
   if(!chosen) return;
   err.classList.remove('show'); result.classList.remove('show');
   go.disabled=true; go.innerHTML='<span class="spin"></span>Aligning&hellip;';
-  const fd=new FormData();
-  fd.append('file',chosen);
-  fd.append('mode',document.querySelector('input[name=mode]:checked').value);
+  const fd=new FormData(); fd.append('file',chosen);
   try{
     const r=await fetch('/api/align',{method:'POST',body:fd});
     const d=await r.json();
     if(!d.success) throw new Error(d.error||'Something went wrong.');
     $('#s-total').textContent=d.slides;
-    $('#s-light').textContent=d.light;
-    $('#s-dark').textContent=d.dark;
-    const note=$('#note'); let msgs=[];
-    if(d.guesses) msgs.push(d.guesses+' slide'+(d.guesses>1?'s had':' had')+
-      ' a hard-to-read background &mdash; worth a quick visual check.');
-    (d.warnings||[]).forEach(w=>msgs.push(w));
+    $('#s-added').textContent=d.logos_added;
+    $('#s-kept').textContent=d.logos_kept;
+    $('#s-fonts').textContent=d.fonts_embedded?'\u2713':'\u2014';
+    const note=$('#note'); const msgs=(d.warnings||[]);
     if(msgs.length){ note.innerHTML=msgs.join('<br>'); note.style.display='block'; }
     else note.style.display='none';
     dl.href='/api/download/'+d.file_id+'?name='+encodeURIComponent(d.download_name);

@@ -1,15 +1,11 @@
 """
 Xelix Brand Aligner — web app
 =============================
-Single purpose: upload one Xelix deck, run it through the brand normalizer so
-every slide conforms to the Xelix brand guidelines (Barlow typography, the
-wordmark bottom-right, and — optionally — the canonical white / hero-gradient
-backgrounds and brand text colours), then download the aligned deck.
-
-Routes:
-  GET  /                      the page
-  POST /api/align             multipart: file (.pptx) + mode (safe|full)
-  GET  /api/download/<id>     the aligned deck
+Upload one Xelix deck, align it to the brand guidelines, download the result.
+One comprehensive pass: embeds Barlow so the deck renders correctly everywhere,
+sets Barlow typography, ensures one correctly-coloured wordmark per slide
+(without doubling an existing one), and repairs any dark-on-dark / light-on-light
+text. Backgrounds and layouts are left intact.
 """
 import os, uuid, tempfile, traceback
 from flask import Flask, render_template, request, jsonify, send_file
@@ -22,7 +18,7 @@ OUT_DIR = os.path.join(tempfile.gettempdir(), 'xelix_aligned')
 os.makedirs(OUT_DIR, exist_ok=True)
 
 app = Flask(__name__)
-app.config['MAX_CONTENT_LENGTH'] = 200 * 1024 * 1024   # 200 MB — 100+ slide decks
+app.config['MAX_CONTENT_LENGTH'] = 300 * 1024 * 1024   # 300 MB — 100+ slide decks
 
 
 @app.route('/')
@@ -37,8 +33,6 @@ def align():
     f = request.files['file']
     if not f.filename or not f.filename.lower().endswith('.pptx'):
         return jsonify(success=False, error='Please upload a .pptx file.'), 400
-    mode = request.form.get('mode', 'safe')
-    full = (mode == 'full')
 
     file_id = uuid.uuid4().hex
     in_path = os.path.join(OUT_DIR, file_id + '_in.pptx')
@@ -46,8 +40,7 @@ def align():
     f.save(in_path)
     try:
         report = normalize_deck(in_path, out_path,
-                                logo_blue=LOGO_BLUE, logo_white=LOGO_WHITE,
-                                unify_background=full)
+                                logo_blue=LOGO_BLUE, logo_white=LOGO_WHITE)
     except Exception:
         traceback.print_exc()
         return jsonify(success=False,
@@ -57,20 +50,19 @@ def align():
         if os.path.exists(in_path):
             os.remove(in_path)
 
-    dark = sum(1 for s in report['slides'] if s['regime'] == 'dark')
-    light = len(report['slides']) - dark
-    guesses = sum(1 for s in report['slides'] if not s['confident'])
     return jsonify(
         success=True, file_id=file_id,
-        slides=len(report['slides']), dark=dark, light=light,
-        mode=report['mode'], guesses=guesses, warnings=report['warnings'],
+        slides=len(report['slides']),
+        logos_added=report.get('logos_added', 0),
+        logos_kept=report.get('logos_kept', 0),
+        fonts_embedded=report.get('fonts_embedded', False),
+        warnings=report.get('warnings', []),
         download_name=os.path.splitext(f.filename)[0] + '_on-brand.pptx',
     )
 
 
 @app.route('/api/download/<file_id>')
 def download(file_id):
-    # file_id is a hex uuid; reject anything else (no path traversal)
     if not file_id.isalnum():
         return 'Not found', 404
     path = os.path.join(OUT_DIR, file_id + '.pptx')
