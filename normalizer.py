@@ -259,13 +259,18 @@ def _swap_fonts_in_runs(slide_xml):
                 el = rpr.find(a + kind)
                 if el is None:
                     el = etree.SubElement(rpr, a + kind)
-                el.set('typeface', font)
+                    el.set('typeface', font)
+                elif is_title:
+                    el.set('typeface', font)       # titles always get heading font
+                elif not el.get('typeface', '').startswith('Barlow'):
+                    el.set('typeface', font)        # non-Barlow -> Barlow
+                # else: already a Barlow variant (ExtraBold, SemiBold, etc.) — leave
     for rpr in root.iter():
         if etree.QName(rpr).localname not in ('rPr', 'defRPr', 'endParaRPr'):
             continue
         for kind in ('latin', 'ea', 'cs'):
             el = rpr.find(a + kind)
-            if el is not None and el.get('typeface') not in (BODY_FONT, HEADING_FONT):
+            if el is not None and not el.get('typeface', '').startswith('Barlow'):
                 el.set('typeface', BODY_FONT)
     return etree.tostring(root, xml_declaration=True, encoding='UTF-8',
                           standalone=True).decode('utf-8')
@@ -388,8 +393,8 @@ def _fix_contrast_local(slide_xml, zin, slide_name, w, h):
     bbox_self_marker = object()
     changed = False
 
-    # text shapes
-    for sp in spTree.findall(p + 'sp'):
+    # text shapes (including inside groups — root.iter catches nested sp)
+    for sp in root.iter(p + 'sp'):
         txbody = sp.find(p + 'txBody')
         if txbody is None:
             continue
@@ -407,8 +412,11 @@ def _fix_contrast_local(slide_xml, zin, slide_name, w, h):
                 for pb, pl in reversed(panels):
                     if pb == bbox:
                         continue
-                    if pb[0] - 1 <= cx <= pb[0] + pb[2] + 1 and \
-                       pb[1] - 1 <= cy <= pb[1] + pb[3] + 1:
+                    # require centre to be well inside the panel (10% inset),
+                    # not just touching the edge
+                    mx, my = pb[2] * 0.10, pb[3] * 0.10
+                    if pb[0] + mx <= cx <= pb[0] + pb[2] - mx and \
+                       pb[1] + my <= cy <= pb[1] + pb[3] - my:
                         lum = pl
                         break
         dark = lum < 128
